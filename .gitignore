@@ -1,0 +1,26 @@
+# Logs de Ejecución
+*.log
+organizer.log
+rollback.log
+
+# Archivos Transaccionales y de Estados Concurrentes
+# (Vital para no exponer al mundo qué rutas o archivos reales tienes en tu JSON local)
+transfer_history.json
+transfer_history*.json
+*.bak
+*.bak.json
+*.tmp
+*.lock
+
+# Entornos Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+venv/
+env/
+.env
+
+# Archivos del Sistema Operativo
+.DS_Store
+Thumbs.db

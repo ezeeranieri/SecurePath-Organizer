@@ -113,7 +113,7 @@ def _commit_transaction(source_path: Path, transaction: dict):
                 with open(history_file, 'r', encoding='utf-8') as f:
                     existing = json.load(f)
             except Exception as e:
-                logger.error(f"Previous transaction log logic failed/corrupted. Starting fresh...: {e}")
+                logger.error(f"Integrity check failed. Previous transaction log corrupted. Starting fresh: {e}")
                 
         existing.append(transaction)
         
@@ -157,6 +157,11 @@ def _process_file(item: Path, source_path: Path, dry_run: bool):
         try:
             target_dir.mkdir(parents=True, exist_ok=True)
             shutil.move(str(item), str(target_file))
+            
+            # Strip permissions if file went to QUARANTINE
+            if target_folder == 'QUARANTINE':
+                os.chmod(str(target_file), 0o444)
+                logger.warning(f"Permission stripped: {item.name} set to read-only (0o444).")
             
             transaction = {
                 "filename": item.name,

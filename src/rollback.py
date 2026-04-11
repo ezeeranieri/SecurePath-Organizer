@@ -22,13 +22,13 @@ def rollback_directory(target_dir_path: str):
         logging.error(f"Application state history missing ({history_file.name}). Safe rollback is impossible.")
         return
 
-    logging.info(f"--- Initiating REVERSE INJECTION (Transactional Rollback) on {base_path} ---")
+    logging.info(f"--- Rolling back changes on {base_path} ---")
 
     try:
         with open(history_file, 'r', encoding='utf-8') as f:
             transactions = json.load(f)
     except Exception as e:
-        logging.critical(f"JSON database is corrupted: {e}")
+        logging.critical(f"Integrity check failed. JSON database is corrupted: {e}")
         return
 
     if not transactions:
@@ -51,7 +51,7 @@ def rollback_directory(target_dir_path: str):
                 continue
 
             shutil.move(str(current), str(original))
-            logging.info(f"Atomically Reverted: {current.name} -> {original.parent}/")
+            logging.info(f"Rolling back changes: {current.name} -> {original.parent}/")
             successful_rollbacks += 1
             
         except Exception as e:

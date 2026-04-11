@@ -3,14 +3,14 @@
 organizer.log
 rollback.log
 
-# Archivos Transaccionales y de Estados Concurrentes
-# (Vital para no exponer al mundo qué rutas o archivos reales tienes en tu JSON local)
-transfer_history.json
-transfer_history*.json
-*.bak
-*.bak.json
-*.tmp
-*.lock
+# Database
+*.db
+transfer_history.db
+
+# Temporales de SQLite
+*.db-journal
+*.db-wal
+*.db-shm
 
 # Entornos Python
 __pycache__/

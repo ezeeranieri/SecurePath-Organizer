@@ -1,7 +1,7 @@
 import argparse
 import logging
 import shutil
-import json
+import sqlite3
 from pathlib import Path
 import os
 
@@ -9,83 +9,103 @@ logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+logger = logging.getLogger(__name__)
 
 def rollback_directory(target_dir_path: str):
     """
-    Enterprise Rollback: Uses transfer_history.json to revert only 
+    Rollback procedure: Uses SQLite transfer_history.db to revert only 
     approved movements without damaging the rest of the user's organic filesystem environment.
     """
     base_path = Path(target_dir_path)
-    history_file = base_path / "transfer_history.json"
+    db_path = base_path / "transfer_history.db"
     
-    if not history_file.exists():
-        logging.error(f"Application state history missing ({history_file.name}). Safe rollback is impossible.")
+    if not db_path.exists():
+        logger.error(f"Application state database missing ({db_path.name}). Safe rollback is impossible.")
         return
 
-    logging.info(f"--- Rolling back changes on {base_path} ---")
+    logger.info(f"--- Rolling back changes on {base_path} ---")
 
+    conn = None
     try:
-        with open(history_file, 'r', encoding='utf-8') as f:
-            transactions = json.load(f)
-    except Exception as e:
-        logging.critical(f"Integrity check failed. JSON database is corrupted: {e}")
-        return
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        # Standard SQLite LIFO fetch
+        cursor.execute("SELECT id, filename, original_path, new_path FROM transfers ORDER BY id DESC")
+        transactions = cursor.fetchall()
+        
+        if not transactions:
+            logger.warning("Relocation history has no recorded blocks.")
+            return
 
-    if not transactions:
-        logging.warning("Relocation history has no recorded blocks.")
-        return
-
-    successful_rollbacks = 0
-    # Iterate LIFO (Last In - First Out). Standard DB principle.
-    for idx, tx in enumerate(reversed(transactions)):
-        try:
-            original = Path(tx["original_path"])
-            current = Path(tx["new_path"])
+        successful_rollbacks = 0
+        
+        for tx_id, filename, original_path_str, new_path_str in transactions:
+            original = Path(original_path_str)
+            current = Path(new_path_str)
             
             if not current.exists():
-                logging.warning(f"Temporal desynchronization: {current.name} is no longer found in {current.parent}. Skipping.")
+                logger.warning(f"Temporal desynchronization: {current.name} is no longer found in {current.parent}. Skipping.")
                 continue
 
             if original.exists():
-                logging.warning(f"Overwrite Risk: A new file already exists at {original}. Skipping rollback for this node.")
+                logger.warning(f"Overwrite Risk: A new file already exists at {original}. Skipping rollback for this node.")
                 continue
 
-            shutil.move(str(current), str(original))
-            logging.info(f"Rolling back changes: {current.name} -> {original.parent}/")
-            successful_rollbacks += 1
-            
-        except Exception as e:
-            logging.error(f"Blocking error restoring '{tx['filename']}': {e}")
-            
-    # Garbage Collect: Try to sweep directory bridge structures if they have been left empty
-    checked_folders = set()
-    for tx in transactions:
-        folder = Path(tx["new_path"]).parent
-        if folder not in checked_folders and folder.exists() and folder.is_dir():
-            checked_folders.add(folder)
+            # Execute OS reversion
             try:
-                # rmdir throws OSError if NOT empty, which is exactly the defensive behavior we want
-                folder.rmdir()
-                logging.info(f"♻️ Empty bridge folder destroyed by GC: {folder.name}/")
-            except OSError:
-                pass 
+                # Reactivate permissions if it was forced to basic read-only
+                if "QUARANTINE" in current.parts:
+                    os.chmod(str(current), 0o666)  # Give write logic to move back securely
+            except Exception:
+                pass
 
-    # Post-mortem historical record treatment
+            shutil.move(str(current), str(original))
+            logger.info(f"Rolling back changes: {current.name} -> {original.parent}/")
+            
+            # Strip it from DB dynamically to persist partial rollbacks securely
+            conn.execute("DELETE FROM transfers WHERE id = ?", (tx_id,))
+            conn.commit()
+            
+            successful_rollbacks += 1
+                
+    except Exception as e:
+        logger.critical(f"Integrity check failed. SQLite database is corrupted or locked: {e}")
+        return
+    finally:
+        if conn:
+            conn.close()
+
+    # Garbage Collect: Sweep directory bridge structures if they have been left empty
+    try:
+        checked_folders = set()
+        for _, _, _, new_path_str in transactions:
+            folder = Path(new_path_str).parent
+            if folder not in checked_folders and folder.exists() and folder.is_dir():
+                checked_folders.add(folder)
+                try:
+                    folder.rmdir() # Throws OSError if NOT empty
+                    logger.info(f"♻️ Empty bridge folder destroyed by GC: {folder.name}/")
+                except OSError:
+                    pass 
+    except Exception as e:
+        logger.warning(f"Garbage collection encountered minor issues: {e}")
+
+    # Post-mortem DB treatment
     if successful_rollbacks == len(transactions):
         try:
-            backup_file = base_path / "transfer_history.bak.json"
-            if backup_file.exists():
-                backup_file.unlink()
-            history_file.rename(backup_file)
-            logging.info(f"✅ History cleanly rotated to '.bak.json'. 100% of the {len(transactions)} nodes safely reverted. Atomic Rollback Successful.")
+            backup_db = base_path / "transfer_history.bak.db"
+            if backup_db.exists():
+                backup_db.unlink()
+            db_path.rename(backup_db)
+            logger.info(f"✅ History cleanly rotated to '.bak.db'. 100% of the {len(transactions)} nodes safely reverted. Atomic Rollback Successful.")
         except Exception as e:
-            logging.warning(f"Could not backup historical state file: {e}")
+            logger.warning(f"Could not backup historical state database: {e}")
     else:
-        logging.warning(f"⚠️ Alert: Partial rollback completed. Only {successful_rollbacks} of {len(transactions)} nodes were safely sanitized.")
+        logger.warning(f"⚠️ Alert: Partial rollback completed. Only {successful_rollbacks} of {len(transactions)} nodes were safely sanitized.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Transactional Script to revert system to a valid DB Snapshot.")
-    parser.add_argument("--path", type=str, required=True, help="Root path where transfer_history.json lies.")
+    parser = argparse.ArgumentParser(description="Revert file movements to a previous SQLite database snapshot.")
+    parser.add_argument("--path", type=str, required=True, help="Root path where transfer_history.db lies.")
     
     args = parser.parse_args()
     rollback_directory(args.path)

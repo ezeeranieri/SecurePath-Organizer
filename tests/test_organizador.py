@@ -1,7 +1,7 @@
 import sys
 import tempfile
 import os
-import json
+import sqlite3
 from pathlib import Path
 import pytest
 import shutil
@@ -23,14 +23,16 @@ def create_file(path: Path, content: bytes = b'text'):
     with open(path, 'wb') as f:
         f.write(content)
 
-def test_full_system_lifecycle_with_magic_bytes(workspace):
+def test_full_system_lifecycle_with_sqlite_transactional_engine(workspace):
     """
-    Simulates a full run of the Zero-Trust Organizer and an Atomic Rollback.
+    Simulates a full run of the Security-Aware File Organizer and an Atomic Rollback 
+    leveraging the SQLite DB footprint instead of JSON.
     """
     # 1. Provide Context
     safe_file = workspace / "photo.jpg"
     fake_ext_file = workspace / "invoice.pdf"
     malware_file = workspace / "script.bat"
+    healthy_double_ext = workspace / "backup.v1.zip"
     
     # Safe file is a real JPEG (magic bytes match)
     create_file(safe_file, b'\xff\xd8\xff\xe0\x00\x10\x4A\x46')
@@ -40,10 +42,14 @@ def test_full_system_lifecycle_with_magic_bytes(workspace):
     
     # Native Malware file (natively suspicious extension)
     create_file(malware_file, b'echo "Destroy disk"')
+    
+    # Legal double extension (Should be organized nicely, not quarantined)
+    create_file(healthy_double_ext, b'PK\x03\x04\x00\x00\x00')
 
     assert safe_file.exists()
     assert fake_ext_file.exists()
     assert malware_file.exists()
+    assert healthy_double_ext.exists()
     
     # 2. Execute the Organizer
     organizador.organize_directory(str(workspace), dry_run=False)
@@ -53,6 +59,10 @@ def test_full_system_lifecycle_with_magic_bytes(workspace):
     assert (workspace / "Images" / "photo.jpg").exists()
     assert not safe_file.exists()
     
+    # Healthy double-extension went to Compressed folder
+    assert (workspace / "Compressed" / "backup.v1.zip").exists()
+    assert not healthy_double_ext.exists()
+    
     # Fake PDF (Identity Spoofing) went to QUARANTINE
     assert (workspace / "QUARANTINE" / "invoice.pdf").exists()
     assert not fake_ext_file.exists()
@@ -61,13 +71,19 @@ def test_full_system_lifecycle_with_magic_bytes(workspace):
     assert (workspace / "QUARANTINE" / "script.bat").exists()
     assert not malware_file.exists()
     
-    # Verify transaction JSON exists
-    history_file = workspace / "transfer_history.json"
-    assert history_file.exists()
+    # Verify transaction SQLite DB exists
+    db_path = workspace / "transfer_history.db"
+    assert db_path.exists()
     
-    with open(history_file, 'r', encoding='utf-8') as f:
-        transactions = json.load(f)
-        assert len(transactions) == 3
+    # Execute forensic read over SQLite
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM transfers")
+    count = cursor.fetchone()[0]
+    conn.close()
+    
+    # 4 files were processed and safely registered in the database
+    assert count == 4
 
     # 4. Execute standard Atomic Rollback
     rollback.rollback_directory(str(workspace))
@@ -76,11 +92,13 @@ def test_full_system_lifecycle_with_magic_bytes(workspace):
     assert safe_file.exists()
     assert fake_ext_file.exists()
     assert malware_file.exists()
+    assert healthy_double_ext.exists()
     
     # And their temporal sub-directories were cleared out by Garbage Collector
     assert not (workspace / "Images").exists()
+    assert not (workspace / "Compressed").exists()
     assert not (workspace / "QUARANTINE").exists()
     
-    # Verify the history file was migrated into a .bak
-    assert not history_file.exists()
-    assert (workspace / "transfer_history.bak.json").exists()
+    # Verify the database was migrated into a .bak
+    assert not db_path.exists()
+    assert (workspace / "transfer_history.bak.db").exists()

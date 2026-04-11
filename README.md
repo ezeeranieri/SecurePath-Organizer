@@ -9,11 +9,16 @@ A concurrent file organizer built in Python, designed to categorize files while 
 - **Transactional Rollback**: File movements are logged into a local SQLite database (`transfer_history.db`). A dedicated rollback script allows reverting operations sequentially (LIFO) if needed.
 - **Quarantine & Permission Management**: Files classified as suspicious are moved to a dedicated `QUARANTINE` folder, and their read-only attribute is flagged (`chmod 0o444`) to prevent accidental modifications.
 
+## Requirements
+
+- Python 3.8+
+- pytest
+
 ## Installation & Usage
 
 **1. Clone the repository**
 ```bash
-git clone https://github.com/YourUsername/SecurePath-Organizer.git
+git clone https://github.com/ezeeranieri/SecurePath-Organizer.git
 cd SecurePath-Organizer
 ```
 

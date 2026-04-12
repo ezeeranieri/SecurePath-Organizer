@@ -145,8 +145,8 @@ def execute_transfer(item: Path, source_path: Path, target_folder: str, threat_t
         # Pre-move safety measures enforce secure state before attempting I/O transaction
         if target_folder == 'QUARANTINE':
             logger.warning(f"Threat Detected & Isolated!: {item.name} -> {threat_type}")
-            os.chmod(str(item), 0o444)
-            logger.warning(f"Permission stripped: {item.name} set to read-only (0o444).")
+            os.chmod(str(item), 0o400)
+            logger.warning(f"Permission stripped: {item.name} set to owner-read-only (0o400).")
             send_alert_async(item.name, threat_type)
 
         # File I/O happens fully parallel outside locks

@@ -55,7 +55,7 @@ def rollback_directory(target_dir_path: str):
             try:
                 # Reactivate permissions if it was forced to basic read-only
                 if "QUARANTINE" in current.parts:
-                    os.chmod(str(current), 0o666)  # Give write logic to move back securely
+                    os.chmod(str(current), 0o600)  # Give owner write logic to move back securely
             except Exception:
                 pass
 

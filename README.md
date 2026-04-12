@@ -10,7 +10,7 @@ A concurrent file organizer built in Python, designed to categorize files while 
 - **Concurrent Processing**: Utilizes `ThreadPoolExecutor` to handle file I/O operations in parallel, improving performance on large directories.
 - **Basic Threat Validation**: Analyzes files using magic bytes (e.g., verifying `MZ` headers) instead of exclusively trusting standard file extensions to prevent basic identity spoofing.
 - **Transactional Rollback**: File movements are logged into a local SQLite database (`transfer_history.db`). A dedicated rollback script allows reverting operations sequentially (LIFO) if needed.
-- **Quarantine & Permission Management**: Files classified as suspicious are moved to a dedicated `QUARANTINE` folder, and their read-only attribute is flagged (`chmod 0o444`) to prevent accidental modifications.
+- **Quarantine & Permission Management**: Files classified as suspicious are moved to a dedicated `QUARANTINE` folder, and their read-only attribute is flagged (`chmod 0o400`) to prevent accidental modifications.
 
 ## Requirements
 
@@ -53,6 +53,26 @@ python src/rollback.py --path "C:\Path\To\Your\Downloads"
 - [ ] Implement external configuration via YAML/JSON arrays to map file extensions.
 - [ ] Add metric reporting for processing using `tqdm`.
 - [ ] Add native support for Multi-OS Path normalization and cross-platform permissions.
+
+## Frequently Asked Questions (FAQ)
+
+**What problem does this solve?**
+SecurePath Organizer automates the cleanup of cluttered directories (like your Downloads folder) by categorizing files into logical subfolders (Images, Documents, Compressed, etc.). Unlike simple scripts that only look at file extensions, it adds a security layer that detects hidden executables and prevents accidental execution of suspicious files.
+
+**What happens if a .pdf file is actually an executable?**
+The tool performs "Binary Forensic" checks on every file. If it detects an `MZ` header (typical of Windows executables) inside a file named `invoice.pdf`, it marks it as "Identity Spoofing". The file is then isolated in a `QUARANTINE` directory, its permissions are stripped to read-only (`0o400`), and an optional security alert is triggered via Webhook.
+
+**What is the rollback and when would I use it?**
+The rollback (`src/rollback.py`) is a "safety net" script. Every file move is recorded in a transactional SQLite database. If you organize a folder and realize you preferred the original state, running the rollback will move everything back to its exact original path and restore permissions, even for quarantined files.
+
+**Is it safe to run on my Downloads folder?**
+Yes. For maximum safety, you should first use the `--dry-run` flag to see exactly what would happen without modifying any files. The tool is designed to be "self-aware"—it automatically ignores its own logs, database, and source code scripts to prevent moving itself.
+
+**What technologies does it use and why?**
+- **Python Standard Library**: To keep the tool lightweight with zero external dependencies (no `pip install` required for core features).
+- **SQLite**: Used for transaction logging because it's more robust than JSON or text files, ensuring the rollback database won't corrupt during concurrent operations.
+- **Multithreading (`ThreadPoolExecutor`)**: Speeds up the organization of thousands of files by handling I/O operations in parallel.
+- **Magic Bytes Validation**: Uses binary headers to identify file types, a method used in digital forensics to bypass extension-based spoofing.
 
 ---
 Released under the **MIT License**.

@@ -1,27 +1,18 @@
-import sys
-import tempfile
+"""
+Security and permissions tests for SecurePath Organizer.
+"""
 import os
 import stat
 from pathlib import Path
-import pytest
-
-# Add src folder to PYTHONPATH
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import organizador
 import rollback
-from config import CONFIG
 
-@pytest.fixture
-def workspace():
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        yield Path(tmpdirname)
+from conftest import create_file
 
-def create_file(path: Path, content: bytes = b'text'):
-    with open(path, 'wb') as f:
-        f.write(content)
 
 def get_mode(path: Path):
+    """Get file permissions mode."""
     return stat.S_IMODE(os.lstat(path).st_mode)
 
 def test_quarantine_permissions_are_restricted(workspace):

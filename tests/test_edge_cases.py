@@ -3,33 +3,15 @@ Edge case tests for SecurePath Organizer.
 
 Tests filename collisions, empty directories, and dry-run safety.
 """
-import sys
-import tempfile
 import os
 import sqlite3
 from pathlib import Path
-import pytest
 import shutil
-
-# Add src folder to PYTHONPATH
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import organizador
 import rollback
-from config import CONFIG
 
-
-@pytest.fixture
-def workspace():
-    """Builds a temporary directory as a safe workspace."""
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        yield Path(tmpdirname)
-
-
-def create_file(path: Path, content: bytes = b'text'):
-    """Utility to create files with raw binary/text content."""
-    with open(path, 'wb') as f:
-        f.write(content)
+from conftest import create_file
 
 
 def test_filename_collision_prevention(workspace):

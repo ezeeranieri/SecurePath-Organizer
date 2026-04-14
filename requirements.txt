@@ -1,0 +1,6 @@
+# SecurePath Organizer - No external dependencies required
+# This project uses only Python standard library modules:
+#   os, argparse, logging, shutil, json, urllib.request, sqlite3,
+#   pathlib, datetime, concurrent.futures, threading
+#
+# Python 3.8+ required

@@ -28,25 +28,37 @@ cd SecurePath-Organizer
 **2. Dry-Run Execution**
 Test the categorization logic and review logs without altering actual files on disk:
 ```bash
-python src/organizador.py --path "C:\Path\To\Your\Downloads" --dry-run
+python src/organizador.py --path "/home/user/Downloads" --dry-run
+# Or on Windows:
+# python src/organizador.py --path "C:\Path\To\Your\Downloads" --dry-run
 ```
 
 **3. Run Organizer**
 Execute the file organization process:
 ```bash
-python src/organizador.py --path "C:\Path\To\Your\Downloads"
+python src/organizador.py --path "/home/user/Downloads"
+# Or on Windows:
+# python src/organizador.py --path "C:\Path\To\Your\Downloads"
 ```
 
 **4. Rollback Operations**
 Revert the last batch of file movements to restore the directory to its previous state:
 ```bash
-python src/rollback.py --path "C:\Path\To\Your\Downloads"
+python src/rollback.py --path "/home/user/Downloads"
+# Or on Windows:
+# python src/rollback.py --path "C:\Path\To\Your\Downloads"
 ```
 
 ## Engineering Decisions
 
 - **Granular File-System Locks**: To prevent race conditions during concurrent directory validation without halting the entire pool, a `threading.Lock()` is placed strictly around path validation and folder creation. The actual I/O move operation (`shutil.move`) is kept outside the lock to prevent blocking the thread pool.
-- **SQLite over JSON for Tracking**: Transitioning from a flat JSON file array to SQLite prevents JSON serialization overhead and file locks during concurrent logging, reducing memory overhead when organizing deeply populated local directories.
+
+- **Concurrency Model: ThreadPoolExecutor vs ProcessPool**: We chose `ThreadPoolExecutor(max_workers=8)` over `ProcessPoolExecutor` because file organization is I/O-bound (disk operations), not CPU-bound. Threads are lighter weight than processes and share memory space, avoiding the serialization overhead of multiprocessing. However, this choice introduces the Global Interpreter Lock (GIL) limitation—true CPU parallelism is not achieved, but since disk I/O releases the GIL during wait times, threads efficiently interleave operations. The trade-off: simpler shared state and lower memory footprint vs. no true parallelism for CPU-intensive tasks (which this tool does not perform).
+
+- **Two-Lock Strategy**: We maintain separate locks for database operations (`db_lock`) and filesystem operations (`fs_lock`). This allows concurrent database writes and directory validations to proceed independently—if a thread is committing to SQLite, another thread can still validate a destination path without blocking.
+
+- **SQLite over JSON for Tracking**: Transitioning from a flat JSON file array to SQLite prevents JSON serialization overhead and file locks during concurrent logging, reducing memory overhead when organizing deeply populated local directories. SQLite handles concurrent writes safely through its own internal locking, while JSON would require coarse-grained locks on the entire file.
+
 - **Fail-Safe Operation Order**: Process order dictates that threat logging and permission attributes (`os.chmod`) are applied prior to moving the file. If a file-system exception halts the transfer, the file's attribute modifications are already in place in the source directory.
 
 ## Roadmap

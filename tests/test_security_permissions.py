@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import organizador
 import rollback
+from config import CONFIG
 
 @pytest.fixture
 def workspace():

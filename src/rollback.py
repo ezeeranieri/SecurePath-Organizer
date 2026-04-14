@@ -1,15 +1,13 @@
+"""
+Rollback module for reverting file organization operations.
+"""
 import argparse
-import logging
 import shutil
 import sqlite3
 from pathlib import Path
 import os
 
-logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from config import logger
 
 def rollback_directory(target_dir_path: str):
     """

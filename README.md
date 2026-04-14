@@ -57,6 +57,23 @@ python src/rollback.py --path "/home/user/Downloads" --dry-run
 # python src/rollback.py --path "C:\Path\To\Your\Downloads" --dry-run
 ```
 
+## Running Tests
+
+**1. Install test dependencies**
+```bash
+pip install -r requirements-dev.txt
+```
+
+**2. Run the test suite**
+```bash
+python -m pytest
+```
+
+For verbose output with coverage:
+```bash
+python -m pytest -v --cov=src
+```
+
 ## Project Structure
 
 ```

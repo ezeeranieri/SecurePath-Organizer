@@ -1,7 +1,7 @@
 # SecurePath Organizer
 
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=ezeeranieri_SecurePath-Organizer)](https://sonarcloud.io/summary/new_code?id=ezeeranieri_SecurePath-Organizer)
-[![codecov](https://codecov.io/github/ezeeranieri/SecurePath-Organizer/graph/badge.svg?token=TOH06FVHVU)](https://codecov.io/github/ezeeranieri/SecurePath-Organizer)
+[![codecov](https://codecov.io/github/ezeeranieri/SecurePath-Organizer/graph/badge.svg)](https://codecov.io/github/ezeeranieri/SecurePath-Organizer)
 
 A concurrent file organizer built in Python, designed to categorize files while performing basic security checks. It relies on magic bytes validation to detect potentially masked extensions and uses an embedded SQLite database to track file operations, providing a reliable rollback mechanism.
 
@@ -49,6 +49,26 @@ python src/rollback.py --path "/home/user/Downloads"
 # python src/rollback.py --path "C:\Path\To\Your\Downloads"
 ```
 
+**5. Rollback Dry-Run**
+Preview what files would be restored without actually moving them:
+```bash
+python src/rollback.py --path "/home/user/Downloads" --dry-run
+# Or on Windows:
+# python src/rollback.py --path "C:\Path\To\Your\Downloads" --dry-run
+```
+
+## Project Structure
+
+```
+src/
+├── config.py          # Centralized configuration, logging, and global locks
+├── security.py        # Threat detection (magic bytes) and file classification
+├── database.py        # SQLite transaction logging and database initialization
+├── transfer.py        # File I/O operations, permission management, and alerting
+├── organizador.py     # Main orchestration module and CLI entry point
+└── rollback.py        # Rollback operations with dry-run support
+```
+
 ## Engineering Decisions
 
 - **Granular File-System Locks**: To prevent race conditions during concurrent directory validation without halting the entire pool, a `threading.Lock()` is placed strictly around path validation and folder creation. The actual I/O move operation (`shutil.move`) is kept outside the lock to prevent blocking the thread pool.
@@ -60,6 +80,16 @@ python src/rollback.py --path "/home/user/Downloads"
 - **SQLite over JSON for Tracking**: Transitioning from a flat JSON file array to SQLite prevents JSON serialization overhead and file locks during concurrent logging, reducing memory overhead when organizing deeply populated local directories. SQLite handles concurrent writes safely through its own internal locking, while JSON would require coarse-grained locks on the entire file.
 
 - **Fail-Safe Operation Order**: Process order dictates that threat logging and permission attributes (`os.chmod`) are applied prior to moving the file. If a file-system exception halts the transfer, the file's attribute modifications are already in place in the source directory.
+
+## Challenges & Learnings
+
+**Single Responsibility Principle Refactoring**: The initial monolithic `organizador.py` contained configuration, security logic, database operations, file transfers, and orchestration all in one file. Refactoring into separate modules (`config.py`, `security.py`, `database.py`, `transfer.py`) improved testability and made the codebase more maintainable. The key challenge was ensuring circular imports didn't occur—`config.py` must be importable by all other modules without itself importing from them.
+
+**Two-Lock Concurrency Strategy**: During concurrent file processing, we discovered race conditions where two threads could attempt to create the same destination folder simultaneously. The solution was granular locking: `fs_lock` for filesystem operations (path validation, folder creation) and `db_lock` for database writes. This allows database commits and filesystem operations to overlap, maximizing throughput while preventing data corruption.
+
+**SQLite vs JSON Decision**: Early prototypes used JSON for transaction logging, but we encountered file corruption when multiple threads attempted simultaneous writes. SQLite's built-in row-level locking solved this without requiring coarse-grained application locks. The migration also reduced memory usage—JSON required loading the entire transaction history into memory, while SQLite streams results on demand.
+
+**Magic Bytes Detection Complexity**: Implementing reliable magic bytes validation required handling partial file reads, varying header lengths, and edge cases where files are too small to have valid headers. We learned that magic bytes alone aren't sufficient—combining them with extension validation provides defense in depth. The quarantine mechanism was added after realizing that simply detecting threats wasn't enough; we needed to actively prevent accidental execution.
 
 ## Roadmap
 - [ ] Implement external configuration via YAML/JSON arrays to map file extensions.

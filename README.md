@@ -1,7 +1,7 @@
 # SecurePath Organizer
 
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=ezeeranieri_SecurePath-Organizer)](https://sonarcloud.io/summary/new_code?id=ezeeranieri_SecurePath-Organizer)
-[![codecov](https://codecov.io/github/ezeeranieri/SecurePath-Organizer/graph/badge.svg)](https://codecov.io/github/ezeeranieri/SecurePath-Organizer)
+[![codecov](https://codecov.io/github/ezeeranieri/SecurePath-Organizer/graph/badge.svg?token=TOH06FVHVU)](https://codecov.io/github/ezeeranieri/SecurePath-Organizer)
 
 A concurrent file organizer built in Python, designed to categorize files while performing basic security checks. It relies on magic bytes validation to detect potentially masked extensions and uses an embedded SQLite database to track file operations, providing a reliable rollback mechanism.
 

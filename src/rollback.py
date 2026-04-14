@@ -9,10 +9,14 @@ import os
 
 from config import logger
 
-def rollback_directory(target_dir_path: str):
+def rollback_directory(target_dir_path: str, dry_run: bool = False):
     """
     Rollback procedure: Uses SQLite transfer_history.db to revert only 
     approved movements without damaging the rest of the user's organic filesystem environment.
+    
+    Args:
+        target_dir_path: Path to the directory containing transfer_history.db
+        dry_run: If True, only simulate rollback without moving files
     """
     base_path = Path(target_dir_path)
     db_path = base_path / "transfer_history.db"
@@ -21,7 +25,8 @@ def rollback_directory(target_dir_path: str):
         logger.error(f"Application state database missing ({db_path.name}). Safe rollback is impossible.")
         return
 
-    logger.info(f"--- Rolling back changes on {base_path} ---")
+    mode = "[DRY-RUN] " if dry_run else ""
+    logger.info(f"--- {mode}Rolling back changes on {base_path} ---")
 
     conn = None
     try:
@@ -49,6 +54,13 @@ def rollback_directory(target_dir_path: str):
                 logger.warning(f"Overwrite Risk: A new file already exists at {original}. Skipping rollback for this node.")
                 continue
 
+            if dry_run:
+                logger.info(f"[DRY RUN] Planned rollback: {current.name} -> {original.parent}/")
+                if "QUARANTINE" in current.parts:
+                    logger.info(f"[DRY RUN] Would restore permissions on: {current.name}")
+                successful_rollbacks += 1
+                continue
+
             # Execute OS reversion
             try:
                 # Reactivate permissions if it was forced to basic read-only
@@ -74,22 +86,26 @@ def rollback_directory(target_dir_path: str):
             conn.close()
 
     # Garbage Collect: Sweep directory bridge structures if they have been left empty
-    try:
-        checked_folders = set()
-        for _, _, _, new_path_str in transactions:
-            folder = Path(new_path_str).parent
-            if folder not in checked_folders and folder.exists() and folder.is_dir():
-                checked_folders.add(folder)
-                try:
-                    folder.rmdir() # Throws OSError if NOT empty
-                    logger.info(f"♻️ Empty bridge folder destroyed by GC: {folder.name}/")
-                except OSError:
-                    pass 
-    except Exception as e:
-        logger.warning(f"Garbage collection encountered minor issues: {e}")
+    if not dry_run:
+        try:
+            checked_folders = set()
+            for _, _, _, new_path_str in transactions:
+                folder = Path(new_path_str).parent
+                if folder not in checked_folders and folder.exists() and folder.is_dir():
+                    checked_folders.add(folder)
+                    try:
+                        folder.rmdir() # Throws OSError if NOT empty
+                        logger.info(f"♻️ Empty bridge folder destroyed by GC: {folder.name}/")
+                    except OSError:
+                        pass 
+        except Exception as e:
+            logger.warning(f"Garbage collection encountered minor issues: {e}")
 
     # Post-mortem DB treatment
-    if successful_rollbacks == len(transactions):
+    if dry_run:
+        logger.info(f"[DRY RUN] Would restore {successful_rollbacks} of {len(transactions)} files.")
+        logger.info("[DRY RUN] No changes were made. Run without --dry-run to execute rollback.")
+    elif successful_rollbacks == len(transactions):
         try:
             backup_db = base_path / "transfer_history.bak.db"
             if backup_db.exists():
@@ -104,6 +120,7 @@ def rollback_directory(target_dir_path: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Revert file movements to a previous SQLite database snapshot.")
     parser.add_argument("--path", type=str, required=True, help="Root path where transfer_history.db lies.")
+    parser.add_argument("--dry-run", action="store_true", help="Dry run emitting logs without OS I/O.")
     
     args = parser.parse_args()
-    rollback_directory(args.path)
+    rollback_directory(args.path, dry_run=args.dry_run)

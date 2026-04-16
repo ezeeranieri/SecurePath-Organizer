@@ -20,6 +20,36 @@ Scan → Analyze → Classify → Move → Log → Rollback
 5. **Log**: Records every operation in SQLite for full traceability
 6. **Rollback**: Restores original state if needed (LIFO recovery)
 
+### What it looks like
+
+**Before** — chaotic Downloads folder:
+```
+Downloads/
+├── invoice.pdf
+├── malware.exe          # disguised with fake extension
+├── photo.jpg
+├── setup.exe            # real executable
+├── script.py
+└── vacation.zip
+```
+
+**After** — organized with quarantine:
+```
+Downloads/
+├── Documents/
+│   └── invoice.pdf
+├── Images/
+│   └── photo.jpg
+├── Executables/
+│   └── setup.exe
+├── Compressed/
+│   └── vacation.zip
+├── Scripts/
+│   └── script.py
+└── QUARANTINE/          # suspicious files isolated
+    └── malware.exe      # permissions locked, read-only
+```
+
 ## Tech Stack
 
 | Component | Technology | Rationale |
@@ -52,6 +82,24 @@ This system introduces a **transactional layer** using SQLite to enable safe rol
 
 - Python 3.8+
 - pytest
+
+## Quick Start
+
+Organize your Downloads folder in one command:
+
+```bash
+python src/organizador.py --path ~/Downloads
+```
+
+Preview changes first (dry-run):
+```bash
+python src/organizador.py --path ~/Downloads --dry-run
+```
+
+Undo if needed:
+```bash
+python src/rollback.py --path ~/Downloads
+```
 
 ## Installation & Usage
 
